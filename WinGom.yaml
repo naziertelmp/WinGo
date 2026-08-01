@@ -1,0 +1,49 @@
+name: Windows RDP Pinggy
+
+on:
+  workflow_dispatch:
+
+jobs:
+  secure-rdp:
+    runs-on: windows-2025
+    timeout-minutes: 3600
+    
+    steps:
+      - name: Enable RDP
+        run: |
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0 -Force
+          netsh advfirewall firewall add rule name="RDP" dir=in action=allow protocol=TCP localport=3389
+          net user runneradmin "admin@123"
+
+      - name: Install SSH
+        run: |
+          # Windows عنده SSH مدمج
+          ssh-keygen -t rsa -N '""' -f ~/.ssh/id_rsa
+
+      - name: Start Pinggy Tunnel
+        shell: bash
+        run: |
+          echo "Starting Pinggy SSH Tunnel for RDP..."
+          ssh -p 443 -o StrictHostKeyChecking=no -T -R 0:localhost:3389 tcp@free.pinggy.io > tunnel.log 2>&1 &
+          
+          sleep 15
+          
+          log_content=$(cat tunnel.log)
+          if [[ $log_content =~ tcp://([^:[[:space:]]]+):([0-9]+) ]]; then
+              hostName="${BASH_REMATCH[1]}"
+              portNumber="${BASH_REMATCH[2]}"
+              echo "========================================="
+              echo "RDP Address: $hostName"
+              echo "RDP Port: $portNumber"
+              echo "RDP User: runneradmin"
+              echo "RDP Pass: admin@123"
+              echo "========================================="
+          else
+              echo "Full log:"
+              cat tunnel.log
+          fi
+          
+          while true; do
+              echo "[$(date)] RDP Active"
+              sleep 300
+          done
